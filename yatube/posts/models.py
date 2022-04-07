@@ -1,6 +1,6 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
-
 
 from core.models import CreatedModel
 
@@ -62,8 +62,7 @@ class Post(CreatedModel):
     def __str__(self) -> str:
         return self.text[0:15]
 
-    class Meta:
-        ordering = ('-pub_date',)
+    class Meta(CreatedModel.Meta):
         verbose_name = 'пост'
         verbose_name_plural = 'посты'
 
@@ -89,13 +88,12 @@ class Comment(CreatedModel):
     def __str__(self) -> str:
         return self.text[0:15]
 
-    class Meta:
-        ordering = ('-pub_date',)
+    class Meta(CreatedModel.Meta):
         verbose_name = 'комментарий'
         verbose_name_plural = 'комментарии'
 
 
-class Follow(CreatedModel):
+class Follow(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -110,5 +108,10 @@ class Follow(CreatedModel):
     )
 
     class Meta:
+        unique_together = (('user', 'author'),)
         verbose_name = 'подписка'
         verbose_name_plural = 'подписки'
+
+    def validate_author(self):
+        if self.author == self.user:
+            raise ValidationError('Подписаться на себя невозможно')

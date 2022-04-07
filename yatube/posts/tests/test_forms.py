@@ -8,15 +8,33 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from posts.forms import PostForm, CommentForm
-from ..models import Group, Post, User, Comment
+from posts.forms import PostForm
+from ..models import Group, Post, User
 
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 POST_CREATE_URL = reverse('posts:post_create')
 USERNAME = 'auth'
-PROFILE_URL = reverse('posts:profile', args=[USERNAME])
+USERNAME_2 = 'name'
+SMALL_GIF = (
+    b'\x47\x49\x46\x38\x39\x61\x02\x00'
+    b'\x01\x00\x80\x00\x00\x00\x00\x00'
+    b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+    b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+    b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+    b'\x0A\x00\x3B'
+)
+UPLOADED = SimpleUploadedFile(
+    name='small.gif',
+    content=SMALL_GIF,
+    content_type='image/gif'
+)
+UPLOADED_2 = SimpleUploadedFile(
+    name='small_2.gif',
+    content=SMALL_GIF,
+    content_type='image/gif'
+)
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
@@ -25,7 +43,8 @@ class PostsFormsTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = User.objects.create_user(username='auth')
+        cls.user = User.objects.create_user(username=USERNAME)
+        cls.user_2 = User.objects.create_user(username=USERNAME_2)
         cls.group = Group.objects.create(
             title='Тестовая группа',
             slug='slug',
@@ -42,22 +61,16 @@ class PostsFormsTests(TestCase):
             group=cls.group,
         )
         cls.form = PostForm()
-        cls.comment = Comment.objects.create(
-            author=cls.user,
-            text='Тестовый комментарий',
-            post=cls.post,
-        )
-        cls.form_2 = CommentForm()
         cls.POST_EDIT_URL = reverse('posts:post_edit', args=[cls.post.id])
         cls.POST_DETAIL_URL = reverse(
             'posts:post_detail', args=[cls.post.id])
         cls.POST_COMMENT_URL = reverse(
             'posts:add_comment', args=[cls.post.id])
-        cls.authorized_client = Client()
-        cls.authorized_client.force_login(cls.user)
-
-    def setUp(self):
-        self.guest_client = Client()
+        cls.guest = Client()
+        cls.author = Client()
+        cls.author.force_login(cls.user)
+        cls.another = Client()
+        cls.another.force_login(cls.user_2)
 
     @classmethod
     def tearDownClass(cls):
@@ -67,37 +80,24 @@ class PostsFormsTests(TestCase):
     def test_create_post(self):
         """Валидная форма создает запись в Post."""
         cache.clear()
-        small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x02\x00'
-            b'\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
-            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
-            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
-            b'\x0A\x00\x3B'
-        )
-        uploaded = SimpleUploadedFile(
-            name='small.gif',
-            content=small_gif,
-            content_type='image/gif'
-        )
         form_data = {
             'text': 'Тестовый пост2',
             'group': self.group.id,
-            'image': uploaded,
+            'image': UPLOADED,
         }
-        response = self.authorized_client.post(
+        self.another.post(
             POST_CREATE_URL,
             data=form_data,
-            follow=True
+            follow=True,
         )
-        self.assertRedirects(response, PROFILE_URL)
         post_list = Post.objects.exclude(id=self.post.id)
+        self.assertEqual(post_list.count(), 1)
         post = post_list[0]
         self.assertEqual(post.text, form_data['text'])
         self.assertEqual(post.group.id, form_data['group'])
-        self.assertEqual(post.author, self.user)
-        self.assertEqual(post.image, 'posts/small.gif')
-        self.assertEqual(post_list.count(), 1)
+        self.assertEqual(post.author, self.user_2)
+        form_image_name = form_data['image'].name
+        self.assertEqual(post.image, f'posts/{form_image_name}')
 
     def test_edit_post(self):
         """Валидная форма изменяет запись в Post."""
@@ -105,8 +105,9 @@ class PostsFormsTests(TestCase):
         form_data = {
             'text': 'Тестовый пост3',
             'group': self.group_2.id,
+            'image': UPLOADED_2,
         }
-        response = self.authorized_client.post(
+        response = self.author.post(
             self.POST_EDIT_URL,
             data=form_data,
             follow=True
@@ -117,6 +118,27 @@ class PostsFormsTests(TestCase):
         self.assertEqual(post.text, form_data['text'])
         self.assertEqual(post.group.id, form_data['group'])
         self.assertEqual(post.author, self.post.author)
+        form_image_name = form_data['image'].name
+        self.assertEqual(post.image, f'posts/{form_image_name}')
+
+    def test_create_comment(self):
+        """Валидная форма создает комментарий в Post."""
+        form_data = {
+            'text': 'Тестовый комментарий',
+            'post': self.post.id,
+            'author': self.user,
+        }
+        self.another.post(
+            self.POST_COMMENT_URL,
+            data=form_data,
+            follow=True,
+        )
+        comments_list = self.post.comments.all()
+        self.assertEqual(comments_list.count(), 1)
+        comment = comments_list[0]
+        self.assertEqual(comment.text, form_data['text'])
+        self.assertEqual(comment.post.id, form_data['post'])
+        self.assertEqual(comment.author, self.user_2)
 
     def test_form_labels(self):
         """labels в полях формы постов совпадает с ожидаемым"""
@@ -150,7 +172,7 @@ class PostsFormsTests(TestCase):
         ]
         for address in addresses:
             with self.subTest(address=address):
-                response = self.authorized_client.get(address)
+                response = self.author.get(address)
                 self.assertIsInstance(response.context.get(
                     'form').fields.get('text'), forms.fields.CharField)
                 self.assertIsInstance(response.context.get(

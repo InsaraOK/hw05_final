@@ -9,9 +9,9 @@ from .models import Post, Group, User, Follow
 
 
 def page_maker(request, object_list):
-    paginator = Paginator(object_list, settings.POST_NUMBER_ON_PAGE)
-    page_number = request.GET.get('page')
-    return paginator.get_page(page_number)
+    return Paginator(
+        object_list,
+        settings.POST_NUMBER_ON_PAGE).get_page(request.GET.get('page'))
 
 
 @cache_page(20)
@@ -31,9 +31,13 @@ def group_posts(request, slug):
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    following = request.user.is_authenticated and Follow.objects.filter(
-        user=request.user).filter(author=author).exists()
-
+    if request.user.is_anonymous:
+        return render(request, 'posts/profile.html', {
+            'author': author,
+            'page_obj': page_maker(request, author.posts.all()),
+        })
+    following = request.user and Follow.objects.filter(
+        user=request.user, author=author).exists()
     return render(request, 'posts/profile.html', {
         'following': following,
         'author': author,
@@ -44,13 +48,10 @@ def profile(request, username):
 def post_detail(request, post_id):
     post = get_object_or_404(Post, id=post_id)
     form = CommentForm(request.POST or None)
-    comments = post.comments.all()
-    context = {
+    return render(request, 'posts/post_detail.html', {
         'form': form,
         'post': post,
-        'comments': comments,
-    }
-    return render(request, 'posts/post_detail.html', context)
+    })
 
 
 @login_required
@@ -77,14 +78,13 @@ def post_edit(request, post_id):
         files=request.FILES or None,
         instance=post
     )
-    context = {
-        'form': form,
-        'post': post,
-    }
     if form.is_valid():
         form.save()
         return redirect('posts:post_detail', post.id)
-    return render(request, 'posts/create_post.html', context)
+    return render(request, 'posts/create_post.html', {
+        'form': form,
+        'post': post,
+    })
 
 
 @login_required
@@ -117,7 +117,6 @@ def profile_follow(request, username):
 
 @login_required
 def profile_unfollow(request, username):
-    author = get_object_or_404(User, username=username)
-    dislike_follows = Follow.objects.filter(user=request.user, author=author)
-    dislike_follows.delete()
+    get_object_or_404(Follow, user=request.user,
+                      author=User.objects.get(username=username)).delete()
     return redirect('posts:profile', username)
