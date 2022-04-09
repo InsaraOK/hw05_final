@@ -51,9 +51,6 @@ class PostsURLTests(TestCase):
         cls.another.force_login(cls.user_2)
 
     def test_posts_urls_exists_at_desired_location_unexist_page_unexists(self):
-        """Страницы приложения доступны пользователям,
-        не существующей страницы не существует
-        """
         cases = [
             [POSTS_URL, self.guest, 200],
             [GROUP_URL, self.guest, 200],
@@ -79,10 +76,8 @@ class PostsURLTests(TestCase):
             with self.subTest(address=address, client=client):
                 self.assertEqual(client.get(address).status_code, code)
 
-    def test_post_redirect(self):
-        """Страницы недоступные определенным категориям пользователей
-        перенаправляют их на доступные страницы или на авторизацию.
-        """
+    def test_redirect(self):
+        """Контроль перенаправлений."""
         cases = [
             [self.POST_EDIT_URL, self.another, self.POST_DETAIL_URL],
             [POST_CREATE_URL, self.guest, LOGIN_URL_POST_CREATE],
@@ -92,6 +87,7 @@ class PostsURLTests(TestCase):
             [FOLLOW_URL, self.guest, LOGIN_URL_FOLLOW_URL],
             [PROFILE_FOLLOW_URL, self.guest, LOGIN_URL_PROFILE_FOLLOW_URL],
             [PROFILE_FOLLOW_URL, self.another, PROFILE_URL],
+            [PROFILE_FOLLOW_URL, self.author, PROFILE_URL],
             [PROFILE_UNFOLLOW_URL, self.guest, LOGIN_URL_PROFILE_UNFOLLOW_URL],
             [PROFILE_UNFOLLOW_URL, self.another, PROFILE_URL],
         ]

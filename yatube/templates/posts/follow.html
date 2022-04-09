@@ -4,11 +4,10 @@
   Посты избранных авторов
 {% endblock %}
 {% block content %}
-  {% if user.is_authenticated %}
-    {% include 'posts/includes/switcher.html' %}
-  {% endif %}
+  {% include 'posts/includes/switcher.html' with follow=True %}
   {% for post in page_obj %}
-    {% include 'posts/includes/post_list.html' %}    
+    {% include 'posts/includes/post.html' with group=True %}
+    {% if not forloop.last %}<hr>{% endif %}    
   {% endfor %}
   {% include 'posts/includes/paginator.html' %}
 {% endblock %}     

@@ -7,7 +7,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from posts.forms import PostForm
-from ..models import Group, Post, User
+from ..models import Group, Post, User, Comment
 
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
@@ -15,6 +15,8 @@ TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 POST_CREATE_URL = reverse('posts:post_create')
 USERNAME = 'auth'
 USERNAME_2 = 'name'
+LOGIN_URL = reverse(settings.LOGIN_URL)
+LOGIN_URL_POST_CREATE = f'{LOGIN_URL}?next={POST_CREATE_URL}'
 SMALL_GIF = (
     b'\x47\x49\x46\x38\x39\x61\x02\x00'
     b'\x01\x00\x80\x00\x00\x00\x00\x00'
@@ -73,18 +75,20 @@ class AnonymousPostsFormsTests(TestCase):
 
     def test_anonymous_cannot_create_post(self):
         """Аноним не может создать запись в Post."""
+        self.assertEqual(Post.objects.count(), 1)
         form_data = {
             'text': 'Тестовый пост4',
             'group': self.group.id,
             'image': UPLOADED,
         }
-        self.guest.post(
+        responce = self.guest.post(
             POST_CREATE_URL,
             data=form_data,
             follow=True,
         )
         post_list = Post.objects.exclude(id=self.post.id)
         self.assertEqual(post_list.count(), 0)
+        self.assertRedirects(responce, LOGIN_URL_POST_CREATE)
 
     def test_anonymous_and_not_author_cannot_edit_post(self):
         """Аноним и не автор не могут изменять запись в Post."""
@@ -101,24 +105,30 @@ class AnonymousPostsFormsTests(TestCase):
                     data=form_data,
                     follow=True
                 )
-                self.assertEqual(Post.objects.count(), 1)
-                post = Post.objects.get(id=self.post.id)
-                self.assertNotEqual(post.text, form_data['text'])
-                self.assertNotEqual(post.group.id, form_data['group'])
                 form_image_name = form_data['image'].name
-                self.assertNotEqual(post.image, f'posts/{form_image_name}')
+                post_image_folder_name = Post._meta.get_field(
+                    'image').upload_to
+                self.assertFalse(Post.objects.filter(
+                    id=self.post.id,
+                    text=form_data['text'],
+                    group=form_data['group'],
+                    image=f'{post_image_folder_name}{form_image_name}'
+                ).exists())
 
     def test_anonymous_cannot_create_comment(self):
         """Аноним не может создать комментарий в Post."""
+        comments_list = self.post.comments.all()
+        self.assertEqual(comments_list.count(), 0)
         form_data = {
             'text': 'Тестовый комментарий',
-            'post': self.post.id,
-            'author': self.user,
         }
         self.guest.post(
             self.POST_COMMENT_URL,
             data=form_data,
             follow=True,
         )
-        comments_list = self.post.comments.all()
+        self.assertFalse(Comment.objects.filter(
+            post=self.post,
+            text=form_data['text']
+        ).exists())
         self.assertEqual(comments_list.count(), 0)

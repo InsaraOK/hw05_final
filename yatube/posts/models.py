@@ -1,5 +1,4 @@
 from django.db import models
-from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 
 from core.models import CreatedModel
@@ -108,10 +107,15 @@ class Follow(models.Model):
     )
 
     class Meta:
-        unique_together = (('user', 'author'),)
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'author'],
+                name='unique_combination',
+            ),
+            models.CheckConstraint(
+                check=~models.Q(user=models.F("author")),
+                name='no_self_follow',
+            ),
+        ]
         verbose_name = 'подписка'
         verbose_name_plural = 'подписки'
-
-    def validate_author(self):
-        if self.author == self.user:
-            raise ValidationError('Подписаться на себя невозможно')

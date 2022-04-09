@@ -46,7 +46,7 @@
         {% include 'posts/includes/comment_form.html' %}
       {% endif %}
       {% for comment in post.comments.all %}
-        {% include 'posts/includes/comment_list.html' %}
+        {% include 'posts/includes/comment.html' %}
       {% endfor %} 
     </article>
   </div> 

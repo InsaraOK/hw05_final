@@ -90,8 +90,8 @@ class PostsViewsTests(TestCase):
         """Шаблоны posts сформированы с правильным контекстом."""
         cache.clear()
         addresses = [
-            [POSTS_URL, self.guest],
             [GROUP_URL, self.guest],
+            [POSTS_URL, self.guest],
             [PROFILE_URL, self.guest],
             [self.POST_DETAIL_URL, self.guest],
             [FOLLOW_URL, self.another],
@@ -110,10 +110,8 @@ class PostsViewsTests(TestCase):
                 self.assertEqual(post.image, self.post.image)
                 self.assertEqual(post.id, self.post.id)
 
-    def test_post_not_in_list_another_group_list_follow_another_user(self):
-        """Пост не попал на страницу другой группы не попал
-        в ленту подписки другого пользователя.
-        """
+    def test_post_at_incorrect_list(self):
+        """Пост не поппал в несоответствующую ленту."""
         cases = [
             [self.GROUP_2_URL, self.another],
             [FOLLOW_URL, self.another_2],
@@ -123,8 +121,8 @@ class PostsViewsTests(TestCase):
                 response = self.another.get(self.GROUP_2_URL)
                 self.assertNotIn(self.post, response.context['page_obj'])
 
-    def test_post_in_list_group(self):
-        """Пост с определенной группой попал на страницу данной группы"""
+    def test_list_group(self):
+        """Проверка содержания групп-ленты"""
         response = self.another.get(self.GROUP_2_URL)
         group_context = response.context['group']
         self.assertEqual(group_context, self.group_2)
@@ -133,8 +131,8 @@ class PostsViewsTests(TestCase):
         self.assertEqual(
             group_context.description, self.group_2.description)
 
-    def test_post_in_list_author_profile(self):
-        """Пост попал на страницу профиля автора"""
+    def test_author_profile(self):
+        """Проверка авторства страницы профиля"""
         response = self.another.get(PROFILE_URL)
         self.assertEqual(response.context['author'], self.user)
 
@@ -146,10 +144,10 @@ class PostsViewsTests(TestCase):
         post.delete()
         self.assertEqual(Post.objects.count(), 0)
         self.assertEqual(
-            list(self.guest.get(POSTS_URL)), list(response))
+            self.guest.get(POSTS_URL).content, response.content)
         cache.clear()
         self.assertNotEqual(
-            list(self.guest.get(POSTS_URL)), list(response))
+            self.guest.get(POSTS_URL).content, response.content)
 
 
 class PaginatorViewsTest(TestCase):
@@ -250,13 +248,13 @@ class CommentFollowViewsTest(TestCase):
         подписываться на другого пользователя.
         """
         self.another.get(self.PROFILE_FOLLOW_URL)
-        follows = Follow.objects.filter(user=self.user_2, author=self.user_3)
-        self.assertEqual(len(follows), 1)
+        self.assertTrue(Follow.objects.filter(
+            user=self.user_2, author=self.user_3).exists())
 
     def test_user_unfollows_another_user(self):
         """Авторизованный пользователь может
         отписаться от других пользователей.
         """
         self.another.get(self.PROFILE_UNFOLLOW_URL)
-        follows = Follow.objects.filter(user=self.user_2, author=self.user_3)
-        self.assertEqual(len(follows), 0)
+        self.assertFalse(Follow.objects.filter(
+            user=self.user_2, author=self.user_3).exists())

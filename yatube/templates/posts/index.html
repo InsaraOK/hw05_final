@@ -5,12 +5,11 @@
   Последние обновления на сайте
 {% endblock %}
 {% block content %}
-  {% if user.is_authenticated %}
-    {% include 'posts/includes/switcher.html' %} 
-  {% endif %}
+  {% include 'posts/includes/switcher.html' with posts=True %} 
   {% cache 20 index_page %}    
     {% for post in page_obj %}
-      {% include 'posts/includes/post_list.html' %}
+      {% include 'posts/includes/post.html' with group=True %}
+      {% if not forloop.last %}<hr>{% endif %}
     {% endfor %}
   {% endcache %} 
   {% include 'posts/includes/paginator.html' %}

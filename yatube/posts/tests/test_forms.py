@@ -9,7 +9,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from posts.forms import PostForm
-from ..models import Group, Post, User
+from ..models import Group, Post, User, Comment
 
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
@@ -97,7 +97,10 @@ class PostsFormsTests(TestCase):
         self.assertEqual(post.group.id, form_data['group'])
         self.assertEqual(post.author, self.user_2)
         form_image_name = form_data['image'].name
-        self.assertEqual(post.image, f'posts/{form_image_name}')
+        post_image_folder_name = Post._meta.get_field('image').upload_to
+        self.assertEqual(post.image,
+                         f'{post_image_folder_name}{form_image_name}'
+                         )
 
     def test_edit_post(self):
         """Валидная форма изменяет запись в Post."""
@@ -119,26 +122,30 @@ class PostsFormsTests(TestCase):
         self.assertEqual(post.group.id, form_data['group'])
         self.assertEqual(post.author, self.post.author)
         form_image_name = form_data['image'].name
-        self.assertEqual(post.image, f'posts/{form_image_name}')
+        post_image_folder_name = Post._meta.get_field('image').upload_to
+        self.assertEqual(post.image,
+                         f'{post_image_folder_name}{form_image_name}'
+                         )
 
     def test_create_comment(self):
         """Валидная форма создает комментарий в Post."""
+        comments_list = self.post.comments.all()
+        self.assertEqual(comments_list.count(), 0)
         form_data = {
             'text': 'Тестовый комментарий',
-            'post': self.post.id,
-            'author': self.user,
         }
         self.another.post(
             self.POST_COMMENT_URL,
             data=form_data,
             follow=True,
         )
-        comments_list = self.post.comments.all()
+        self.assertTrue(Comment.objects.filter(
+            post=self.post,
+            text=form_data['text']
+        ).exists())
         self.assertEqual(comments_list.count(), 1)
         comment = comments_list[0]
         self.assertEqual(comment.text, form_data['text'])
-        self.assertEqual(comment.post.id, form_data['post'])
-        self.assertEqual(comment.author, self.user_2)
 
     def test_form_labels(self):
         """labels в полях формы постов совпадает с ожидаемым"""
