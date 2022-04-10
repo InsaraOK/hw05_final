@@ -155,3 +155,4 @@ CACHES = {
     }
 }
 CACHE_TIME = 20
+POST_IMAGE_FOLDER_NAME = 'posts/'

@@ -88,7 +88,6 @@ class PostsViewsTests(TestCase):
 
     def test_posts_show_correct_context(self):
         """Шаблоны posts сформированы с правильным контекстом."""
-        cache.clear()
         addresses = [
             [GROUP_URL, self.guest],
             [POSTS_URL, self.guest],
@@ -122,7 +121,6 @@ class PostsViewsTests(TestCase):
                 self.assertNotIn(self.post, response.context['page_obj'])
 
     def test_list_group(self):
-        """Проверка содержания групп-ленты"""
         response = self.another.get(self.GROUP_2_URL)
         group_context = response.context['group']
         self.assertEqual(group_context, self.group_2)
@@ -132,17 +130,13 @@ class PostsViewsTests(TestCase):
             group_context.description, self.group_2.description)
 
     def test_author_profile(self):
-        """Проверка авторства страницы профиля"""
         response = self.another.get(PROFILE_URL)
         self.assertEqual(response.context['author'], self.user)
 
     def test_index_post_list_cache(self):
         """Главная страница кеширует список постов"""
         response = self.guest.get(POSTS_URL)
-        self.assertEqual(Post.objects.count(), 1)
-        post = Post.objects.filter(id=self.post.id)[0]
-        post.delete()
-        self.assertEqual(Post.objects.count(), 0)
+        Post.objects.filter(id=self.post.id).delete()
         self.assertEqual(
             self.guest.get(POSTS_URL).content, response.content)
         cache.clear()

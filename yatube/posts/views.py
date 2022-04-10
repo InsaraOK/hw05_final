@@ -2,7 +2,6 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404, redirect
-from django.views.decorators.cache import cache_page
 
 from .forms import PostForm, CommentForm
 from .models import Post, Group, User, Follow
@@ -14,7 +13,6 @@ def page_maker(request, object_list):
         settings.POST_NUMBER_ON_PAGE).get_page(request.GET.get('page'))
 
 
-@cache_page(20)
 def index(request):
     return render(request, 'posts/index.html', {
         'page_obj': page_maker(request, Post.objects.all())
@@ -31,9 +29,9 @@ def group_posts(request, slug):
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    following = request.user
-    following = request.user.is_authenticated and Follow.objects.filter(
-        user=following, author=author).exists()
+    following = request.user.is_authenticated and (
+        author.following.exists()) and (
+        Follow.objects.filter(user=request.user, author=author).exists())
     return render(request, 'posts/profile.html', {
         'following': following,
         'author': author,

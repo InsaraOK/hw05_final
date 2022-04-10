@@ -8,7 +8,9 @@
   <h1> Записи группы: {{ group.title }} </h1>
   <p> {{ group.description|linebreaksbr }} </p>
   {% for post in page_obj %}
-    {% include 'posts/includes/post.html' with group=False %}
+    {% with True as post.group=group%}    
+      {% include 'posts/includes/post.html' %}
+    {% endwith %}
     {% if not forloop.last %}<hr>{% endif %}
   {% endfor %} 
   {% include 'posts/includes/paginator.html' %}

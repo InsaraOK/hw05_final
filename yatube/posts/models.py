@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.conf import settings
 
 from core.models import CreatedModel
 
@@ -52,7 +53,7 @@ class Post(CreatedModel):
     )
     image = models.ImageField(
         'картинка',
-        upload_to='posts/',
+        upload_to=settings.POST_IMAGE_FOLDER_NAME,
         blank=True,
         null=True,
         help_text='Загрузите картинку'
@@ -113,7 +114,7 @@ class Follow(models.Model):
                 name='unique_combination',
             ),
             models.CheckConstraint(
-                check=~models.Q(user=models.F("author")),
+                check=~models.Q(user=models.F('author')),
                 name='no_self_follow',
             ),
         ]

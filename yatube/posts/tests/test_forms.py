@@ -17,6 +17,8 @@ TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 POST_CREATE_URL = reverse('posts:post_create')
 USERNAME = 'auth'
 USERNAME_2 = 'name'
+LOGIN_URL = reverse(settings.LOGIN_URL)
+LOGIN_URL_POST_CREATE = f'{LOGIN_URL}?next={POST_CREATE_URL}'
 SMALL_GIF = (
     b'\x47\x49\x46\x38\x39\x61\x02\x00'
     b'\x01\x00\x80\x00\x00\x00\x00\x00'
@@ -35,6 +37,101 @@ UPLOADED_2 = SimpleUploadedFile(
     content=SMALL_GIF,
     content_type='image/gif'
 )
+UPLOADED_3 = SimpleUploadedFile(
+    name='small_3.gif',
+    content=SMALL_GIF,
+    content_type='image/gif'
+)
+
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
+class AnonymousPostsFormsTests(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = User.objects.create_user(username=USERNAME)
+        cls.user_2 = User.objects.create_user(username=USERNAME_2)
+        cls.group = Group.objects.create(
+            title='Тестовая группа2',
+            slug='slug2',
+            description='Тестовое описание2',
+        )
+        cls.group_2 = Group.objects.create(
+            title='Тестовая группа3',
+            slug='slug3',
+            description='Тестовое описание3',
+        )
+        cls.post = Post.objects.create(
+            author=cls.user,
+            text='Тестовый пост2',
+            group=cls.group,
+        )
+        cls.form = PostForm()
+        cls.POST_EDIT_URL = reverse('posts:post_edit', args=[cls.post.id])
+        cls.POST_COMMENT_URL = reverse(
+            'posts:add_comment', args=[cls.post.id])
+        cls.guest = Client()
+        cls.another = Client()
+        cls.another.force_login(cls.user_2)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
+    def test_anonymous_cannot_create_post(self):
+        """Аноним не может создать запись в Post."""
+        self.assertEqual(Post.objects.count(), 1)
+        form_data = {
+            'text': 'Тестовый пост4',
+            'group': self.group.id,
+            'image': UPLOADED_3,
+        }
+        responce = self.guest.post(
+            POST_CREATE_URL,
+            data=form_data,
+            follow=True,
+        )
+        post_list = Post.objects.exclude(id=self.post.id)
+        self.assertEqual(post_list.count(), 0)
+        self.assertRedirects(responce, LOGIN_URL_POST_CREATE)
+
+    def test_anonymous_and_not_author_cannot_edit_post(self):
+        """Аноним и не автор не могут изменять запись в Post."""
+        post = Post.objects.get(id=self.post.id)
+        form_data = {
+            'text': 'Тестовый пост5',
+            'group': self.group_2.id,
+            'image': UPLOADED_3,
+        }
+        clients = [self.guest, self.another]
+        for client in clients:
+            with self.subTest(client=client):
+                client.post(
+                    self.POST_EDIT_URL,
+                    data=form_data,
+                    follow=True
+                )
+        post_after_changeattempt = Post.objects.get(id=self.post.id)
+        self.assertEqual(post.text, post_after_changeattempt.text)
+        self.assertEqual(post.group, post_after_changeattempt.group)
+        self.assertEqual(post.image, post_after_changeattempt.image)
+        self.assertEqual(post.author, post_after_changeattempt.author)
+
+    def test_anonymous_cannot_create_comment(self):
+        """Аноним не может создать комментарий в Post."""
+        comments = Comment.objects.all()
+        self.assertEqual(comments.count(), 0)
+        form_data = {
+            'text': 'Тестовый комментарий2',
+        }
+        self.guest.post(
+            self.POST_COMMENT_URL,
+            data=form_data,
+            follow=True,
+        )
+        self.assertEqual(comments.count(), 0)
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
@@ -97,9 +194,8 @@ class PostsFormsTests(TestCase):
         self.assertEqual(post.group.id, form_data['group'])
         self.assertEqual(post.author, self.user_2)
         form_image_name = form_data['image'].name
-        post_image_folder_name = Post._meta.get_field('image').upload_to
         self.assertEqual(post.image,
-                         f'{post_image_folder_name}{form_image_name}'
+                         f'{settings.POST_IMAGE_FOLDER_NAME}{form_image_name}'
                          )
 
     def test_edit_post(self):
@@ -122,15 +218,14 @@ class PostsFormsTests(TestCase):
         self.assertEqual(post.group.id, form_data['group'])
         self.assertEqual(post.author, self.post.author)
         form_image_name = form_data['image'].name
-        post_image_folder_name = Post._meta.get_field('image').upload_to
         self.assertEqual(post.image,
-                         f'{post_image_folder_name}{form_image_name}'
+                         f'{settings.POST_IMAGE_FOLDER_NAME}{form_image_name}'
                          )
 
     def test_create_comment(self):
         """Валидная форма создает комментарий в Post."""
-        comments_list = self.post.comments.all()
-        self.assertEqual(comments_list.count(), 0)
+        comments = Comment.objects.all()
+        self.assertEqual(comments.count(), 0)
         form_data = {
             'text': 'Тестовый комментарий',
         }
@@ -139,13 +234,11 @@ class PostsFormsTests(TestCase):
             data=form_data,
             follow=True,
         )
-        self.assertTrue(Comment.objects.filter(
-            post=self.post,
-            text=form_data['text']
-        ).exists())
-        self.assertEqual(comments_list.count(), 1)
-        comment = comments_list[0]
+        self.assertEqual(comments.count(), 1)
+        comment = Comment.objects.get(post=self.post)
         self.assertEqual(comment.text, form_data['text'])
+        self.assertEqual(comment.author, self.user_2)
+        self.assertEqual(comment.post.id, self.post.id)
 
     def test_form_labels(self):
         """labels в полях формы постов совпадает с ожидаемым"""
