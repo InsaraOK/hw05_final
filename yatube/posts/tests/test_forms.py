@@ -42,6 +42,11 @@ UPLOADED_3 = SimpleUploadedFile(
     content=SMALL_GIF,
     content_type='image/gif'
 )
+UPLOADED_4 = SimpleUploadedFile(
+    name='small_4.gif',
+    content=SMALL_GIF,
+    content_type='image/gif'
+)
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
@@ -66,9 +71,14 @@ class AnonymousPostsFormsTests(TestCase):
             author=cls.user,
             text='Тестовый пост2',
             group=cls.group,
+            image=UPLOADED_4
         )
         cls.form = PostForm()
         cls.POST_EDIT_URL = reverse('posts:post_edit', args=[cls.post.id])
+        cls.POST_DETAIL_URL = reverse(
+            'posts:post_detail', args=[cls.post.id])
+        cls.LOGIN_URL_POST_EDIT_URL = (
+            f'{LOGIN_URL}?next={cls.POST_EDIT_URL}')
         cls.POST_COMMENT_URL = reverse(
             'posts:add_comment', args=[cls.post.id])
         cls.guest = Client()
@@ -99,7 +109,6 @@ class AnonymousPostsFormsTests(TestCase):
 
     def test_anonymous_and_not_author_cannot_edit_post(self):
         """Аноним и не автор не могут изменять запись в Post."""
-        post = Post.objects.get(id=self.post.id)
         form_data = {
             'text': 'Тестовый пост5',
             'group': self.group_2.id,
@@ -108,16 +117,24 @@ class AnonymousPostsFormsTests(TestCase):
         clients = [self.guest, self.another]
         for client in clients:
             with self.subTest(client=client):
-                client.post(
+                responce = client.post(
                     self.POST_EDIT_URL,
                     data=form_data,
                     follow=True
                 )
-        post_after_changeattempt = Post.objects.get(id=self.post.id)
-        self.assertEqual(post.text, post_after_changeattempt.text)
-        self.assertEqual(post.group, post_after_changeattempt.group)
-        self.assertEqual(post.image, post_after_changeattempt.image)
-        self.assertEqual(post.author, post_after_changeattempt.author)
+                if client == self.guest:
+                    self.assertRedirects(
+                        responce, self.LOGIN_URL_POST_EDIT_URL)
+                else:
+                    self.assertRedirects(responce, self.POST_DETAIL_URL)
+                post_after_changeattempt = Post.objects.get(id=self.post.id)
+                self.assertEqual(self.post.text, post_after_changeattempt.text)
+                self.assertEqual(
+                    self.post.group, post_after_changeattempt.group)
+                self.assertEqual(
+                    self.post.image, post_after_changeattempt.image)
+                self.assertEqual(self.post.author,
+                                 post_after_changeattempt.author)
 
     def test_anonymous_cannot_create_comment(self):
         """Аноним не может создать комментарий в Post."""

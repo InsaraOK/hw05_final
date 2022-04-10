@@ -18,7 +18,7 @@
     {% endthumbnail %}
   </article>
   <p>{{ post.text|linebreaksbr }}</p>
-  {% if post.group != group %}   
+  {% if post.group and not group %}   
     <a href="{% url 'posts:group_list' post.group.slug %}"> #{{post.group.title}}</a>
   {% endif %}
   <p>
