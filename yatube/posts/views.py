@@ -1,5 +1,3 @@
-from operator import contains
-import re
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -31,7 +29,7 @@ def group_posts(request, slug):
 
 def profile(request, username):
     author = get_object_or_404(User, username=username)
-    following = request.user.is_authenticated and author!=request.user and (
+    following = request.user.is_authenticated and author != request.user and (
         Follow.objects.filter(user=request.user, author=author).exists())
     return render(request, 'posts/profile.html', {
         'following': following,
